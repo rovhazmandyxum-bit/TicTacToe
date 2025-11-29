@@ -9,6 +9,28 @@
     text-align: center;
     margin-top: 40px;
   }
+  #gameMode {
+    margin-bottom: 20px;
+  }
+  .modeBtn {
+    padding: 10px 20px;
+    margin: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    border: 2px solid #444;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+  }
+  .modeBtn.active {
+    background-color: #4CAF50;
+    color: white;
+  }
+  .modeBtn:hover {
+    background-color: #e0e0e0;
+  }
+  .modeBtn.active:hover {
+    background-color: #45a049;
+  }
   #board {
     display: grid;
     grid-template-columns: repeat(3, 120px);
@@ -35,11 +57,20 @@
 <p>Each player may have only <strong>3 pieces</strong>.  
 Oldest piece is removed automatically.</p>
 
+<div id="gameMode">
+  <button class="modeBtn active" onclick="setGameMode('2player')">2 Player</button>
+  <button class="modeBtn" onclick="setGameMode('easy')">vs Computer (Easy)</button>
+  <button class="modeBtn" onclick="setGameMode('medium')">vs Computer (Medium)</button>
+  <button class="modeBtn" onclick="setGameMode('hard')">vs Computer (Hard)</button>
+</div>
+
 <div id="board"></div>
 
 <script>
   const board = document.getElementById("board");
   let currentPlayer = "X";
+  let gameMode = "2player"; // 2player, easy, medium, hard
+  let gameActive = true;
 
   // Store move history
   let moves = {
@@ -59,6 +90,14 @@ Oldest piece is removed automatically.</p>
     [2,4,6]
   ];
 
+  function setGameMode(mode) {
+    gameMode = mode;
+    resetBoard();
+    // Update UI button states
+    document.querySelectorAll(".modeBtn").forEach(btn => btn.classList.remove("active"));
+    event.target.classList.add("active");
+  }
+
   // Create board
   for (let i = 0; i < 9; i++) {
     const cell = document.createElement("div");
@@ -67,33 +106,202 @@ Oldest piece is removed automatically.</p>
     board.appendChild(cell);
 
     cell.addEventListener("click", () => {
-      if (cell.textContent !== "") return;
+      if (cell.textContent !== "" || !gameActive) return;
 
-      // Place mark
-      cell.textContent = currentPlayer;
-      moves[currentPlayer].push(i);
+      // Player X move
+      makeMove(i, "X");
 
-      // Enforce 3-piece rule
-      if (moves[currentPlayer].length > 3) {
-        let oldest = moves[currentPlayer].shift();
-        const oldCell = document.querySelector(
-          `.cell[data-index='${oldest}']`
-        );
-        oldCell.textContent = "";
-      }
-
-      // Check win
-      if (checkWin(currentPlayer)) {
+      // Check win after player move
+      if (checkWin("X")) {
         setTimeout(() => {
-          alert(currentPlayer + " wins!");
+          alert("X wins!");
           resetBoard();
         }, 50);
         return;
       }
 
-      // Switch player
-      currentPlayer = currentPlayer === "X" ? "O" : "X";
+      // Check for tie
+      if (isBoardFull()) {
+        setTimeout(() => {
+          alert("It's a tie!");
+          resetBoard();
+        }, 50);
+        return;
+      }
+
+      // Computer move (if applicable)
+      if (gameMode !== "2player") {
+        gameActive = false;
+        setTimeout(() => {
+          const computerMove = getComputerMove();
+          if (computerMove !== -1) {
+            makeMove(computerMove, "O");
+
+            // Check computer win
+            if (checkWin("O")) {
+              setTimeout(() => {
+                alert("Computer wins!");
+                resetBoard();
+              }, 100);
+              return;
+            }
+
+            // Check for tie
+            if (isBoardFull()) {
+              setTimeout(() => {
+                alert("It's a tie!");
+                resetBoard();
+              }, 100);
+              return;
+            }
+          }
+          gameActive = true;
+        }, 500);
+      } else {
+        currentPlayer = currentPlayer === "X" ? "O" : "X";
+      }
     });
+  }
+
+  function makeMove(index, player) {
+    const cell = document.querySelector(`.cell[data-index='${index}']`);
+    if (cell.textContent !== "") return;
+
+    cell.textContent = player;
+    moves[player].push(index);
+
+    // Enforce 3-piece rule
+    if (moves[player].length > 3) {
+      let oldest = moves[player].shift();
+      const oldCell = document.querySelector(`.cell[data-index='${oldest}']`);
+      oldCell.textContent = "";
+    }
+  }
+
+  function getComputerMove() {
+    const availableMoves = getAvailableMoves();
+    if (availableMoves.length === 0) return -1;
+
+    if (gameMode === "easy") {
+      return easyAI(availableMoves);
+    } else if (gameMode === "medium") {
+      return mediumAI(availableMoves);
+    } else if (gameMode === "hard") {
+      return hardAI(availableMoves);
+    }
+  }
+
+  function getAvailableMoves() {
+    const available = [];
+    for (let i = 0; i < 9; i++) {
+      const cell = document.querySelector(`.cell[data-index='${i}']`);
+      if (cell.textContent === "") {
+        available.push(i);
+      }
+    }
+    return available;
+  }
+
+  function easyAI(availableMoves) {
+    // Random move
+    return availableMoves[Math.floor(Math.random() * availableMoves.length)];
+  }
+
+  function mediumAI(availableMoves) {
+    // Try to win
+    for (let move of availableMoves) {
+      const testMoves = [...moves["O"], move];
+      if (winPatterns.some(pattern => pattern.every(i => testMoves.includes(i)))) {
+        return move;
+      }
+    }
+
+    // Try to block player
+    for (let move of availableMoves) {
+      const testMoves = [...moves["X"], move];
+      if (winPatterns.some(pattern => pattern.every(i => testMoves.includes(i)))) {
+        return move;
+      }
+    }
+
+    // Random move
+    return availableMoves[Math.floor(Math.random() * availableMoves.length)];
+  }
+
+  function hardAI(availableMoves) {
+    let bestScore = -Infinity;
+    let bestMove = availableMoves[0];
+
+    for (let move of availableMoves) {
+      // Save state before minimax
+      const xMovesCopy = [...moves["X"]];
+      const oMovesCopy = [...moves["O"]];
+      
+      const score = minimax(move, "O", 0, true);
+      
+      // Restore state after minimax
+      moves["X"] = xMovesCopy;
+      moves["O"] = oMovesCopy;
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+    }
+    return bestMove;
+  }
+
+  function minimax(move, player, depth, isMaximizing) {
+    // Simulate the move
+    moves[player].push(move);
+
+    // Check terminal states (only if player has 3+ pieces)
+    if (moves[player].length >= 3 && checkWinWithMoves(player, moves[player])) {
+      moves[player].pop();
+      return isMaximizing ? 10 - depth : depth - 10;
+    }
+
+    const available = getAvailableMovesForSimulation();
+    if (available.length === 0) {
+      moves[player].pop();
+      return 0; // Tie
+    }
+
+    let bestScore = isMaximizing ? -Infinity : Infinity;
+
+    for (let nextMove of available) {
+      const nextPlayer = player === "O" ? "X" : "O";
+      const score = minimax(nextMove, nextPlayer, depth + 1, !isMaximizing);
+
+      if (isMaximizing) {
+        bestScore = Math.max(score, bestScore);
+      } else {
+        bestScore = Math.min(score, bestScore);
+      }
+    }
+
+    moves[player].pop();
+    return bestScore;
+  }
+
+  function getAvailableMovesForSimulation() {
+    const occupiedX = new Set(moves["X"]);
+    const occupiedO = new Set(moves["O"]);
+    const available = [];
+    for (let i = 0; i < 9; i++) {
+      if (!occupiedX.has(i) && !occupiedO.has(i)) {
+        available.push(i);
+      }
+    }
+    return available;
+  }
+
+  function checkWinWithMoves(player, playerMoves) {
+    return winPatterns.some(pattern =>
+      pattern.every(index =>
+        playerMoves.includes(index)
+      )
+    );
   }
 
   // Check for winning combination
@@ -110,6 +318,10 @@ Oldest piece is removed automatically.</p>
     );
   }
 
+  function isBoardFull() {
+    return getAvailableMoves().length === 0;
+  }
+
   // Reset board after win
   function resetBoard() {
     document.querySelectorAll(".cell").forEach(cell => {
@@ -117,13 +329,12 @@ Oldest piece is removed automatically.</p>
     });
     moves = { "X": [], "O": [] };
     currentPlayer = "X";
+    gameActive = true;
   }
 </script>
+</script>
 
-<p style="margin-top:20px;">This game was made by Baboonas Baboon</p>
+<p style="margin-top:20px;">This game was made by Babunas Babun</p>
 
 </body>
 </html>
-
-
-
