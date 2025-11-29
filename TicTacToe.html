@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>3-Piece Tic Tac Toe with Win Detection</title>
+<style>
+  body {
+    font-family: Arial;
+    text-align: center;
+    margin-top: 40px;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(3, 120px);
+    grid-template-rows: repeat(3, 120px);
+    gap: 10px;
+    justify-content: center;
+  }
+  .cell {
+    width: 120px;
+    height: 120px;
+    font-size: 60px;
+    font-weight: bold;
+    line-height: 120px;
+    text-align: center;
+    border: 2px solid #444;
+    cursor: pointer;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<h2>3-Piece Tic Tac Toe</h2>
+<p>Each player may have only <strong>3 pieces</strong>.  
+Oldest piece is removed automatically.</p>
+
+<div id="board"></div>
+
+<script>
+  const board = document.getElementById("board");
+  let currentPlayer = "X";
+
+  // Store move history
+  let moves = {
+    "X": [],
+    "O": []
+  };
+
+  // Winning combinations (indices of cells)
+  const winPatterns = [
+    [0,1,2],
+    [3,4,5],
+    [6,7,8],
+    [0,3,6],
+    [1,4,7],
+    [2,5,8],
+    [0,4,8],
+    [2,4,6]
+  ];
+
+  // Create board
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement("div");
+    cell.classList.add("cell");
+    cell.dataset.index = i;
+    board.appendChild(cell);
+
+    cell.addEventListener("click", () => {
+      if (cell.textContent !== "") return;
+
+      // Place mark
+      cell.textContent = currentPlayer;
+      moves[currentPlayer].push(i);
+
+      // Enforce 3-piece rule
+      if (moves[currentPlayer].length > 3) {
+        let oldest = moves[currentPlayer].shift();
+        const oldCell = document.querySelector(
+          `.cell[data-index='${oldest}']`
+        );
+        oldCell.textContent = "";
+      }
+
+      // Check win
+      if (checkWin(currentPlayer)) {
+        setTimeout(() => {
+          alert(currentPlayer + " wins!");
+          resetBoard();
+        }, 50);
+        return;
+      }
+
+      // Switch player
+      currentPlayer = currentPlayer === "X" ? "O" : "X";
+    });
+  }
+
+  // Check for winning combination
+  function checkWin(player) {
+    const playerPositions = moves[player];
+
+    // Only check if player has at least 3 pieces
+    if (playerPositions.length < 3) return false;
+
+    return winPatterns.some(pattern =>
+      pattern.every(index =>
+        playerPositions.includes(index)
+      )
+    );
+  }
+
+  // Reset board after win
+  function resetBoard() {
+    document.querySelectorAll(".cell").forEach(cell => {
+      cell.textContent = "";
+    });
+    moves = { "X": [], "O": [] };
+    currentPlayer = "X";
+  }
+</script>
+
+</body>
+</html>
