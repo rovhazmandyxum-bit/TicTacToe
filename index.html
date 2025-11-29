@@ -133,29 +133,34 @@ Oldest piece is removed automatically.</p>
       if (gameMode !== "2player") {
         gameActive = false;
         setTimeout(() => {
-          const computerMove = getComputerMove();
-          if (computerMove !== -1) {
-            makeMove(computerMove, "O");
+          try {
+            const computerMove = getComputerMove();
+            if (computerMove !== -1) {
+              makeMove(computerMove, "O");
 
-            // Check computer win
-            if (checkWin("O")) {
-              setTimeout(() => {
-                alert("Computer wins!");
-                resetBoard();
-              }, 100);
-              return;
-            }
+              // Check computer win
+              if (checkWin("O")) {
+                setTimeout(() => {
+                  alert("Computer wins!");
+                  resetBoard();
+                }, 100);
+                return;
+              }
 
-            // Check for tie
-            if (isBoardFull()) {
-              setTimeout(() => {
-                alert("It's a tie!");
-                resetBoard();
-              }, 100);
-              return;
+              // Check for tie
+              if (isBoardFull()) {
+                setTimeout(() => {
+                  alert("It's a tie!");
+                  resetBoard();
+                }, 100);
+                return;
+              }
             }
+          } catch (err) {
+            console.error('Error during computer move:', err);
+          } finally {
+            gameActive = true;
           }
-          gameActive = true;
         }, 500);
       } else {
         currentPlayer = currentPlayer === "X" ? "O" : "X";
@@ -237,11 +242,21 @@ Oldest piece is removed automatically.</p>
       const xMovesCopy = [...moves["X"]];
       const oMovesCopy = [...moves["O"]];
       
-      const score = minimax(move, "O", 0, true);
+      makeMove(move, "O");
+      const score = minimax(3, "X", -Infinity, Infinity); // Search 3 moves ahead
       
-      // Restore state after minimax
+      // Restore state
       moves["X"] = xMovesCopy;
       moves["O"] = oMovesCopy;
+      document.querySelectorAll(".cell").forEach(cell => {
+        cell.textContent = "";
+      });
+      for (let idx of xMovesCopy) {
+        document.querySelector(`.cell[data-index='${idx}']`).textContent = "X";
+      }
+      for (let idx of oMovesCopy) {
+        document.querySelector(`.cell[data-index='${idx}']`).textContent = "O";
+      }
       
       if (score > bestScore) {
         bestScore = score;
@@ -251,38 +266,95 @@ Oldest piece is removed automatically.</p>
     return bestMove;
   }
 
-  function minimax(move, player, depth, isMaximizing) {
-    // Simulate the move
-    moves[player].push(move);
-
-    // Check terminal states (only if player has 3+ pieces)
-    if (moves[player].length >= 3 && checkWinWithMoves(player, moves[player])) {
-      moves[player].pop();
-      return isMaximizing ? 10 - depth : depth - 10;
-    }
-
+  function minimax(depth, player, alpha, beta) {
+    // Terminal states
+    if (checkWin("O")) return 100;
+    if (checkWin("X")) return -100;
+    
     const available = getAvailableMovesForSimulation();
-    if (available.length === 0) {
-      moves[player].pop();
-      return 0; // Tie
+    if (available.length === 0) return 0; // Tie
+    if (depth === 0) return evaluatePosition("O", "X"); // Leaf node evaluation
+
+    if (player === "X") {
+      // Minimizing player (opponent)
+      let minEval = Infinity;
+      for (let move of available) {
+        let removed = null;
+        moves["X"].push(move);
+        if (moves["X"].length > 3) {
+          removed = moves["X"].shift();
+        }
+
+        const eval_ = minimax(depth - 1, "O", alpha, beta);
+        minEval = Math.min(eval_, minEval);
+        
+        moves["X"].pop();
+        if (removed !== null) moves["X"].unshift(removed);
+        
+        beta = Math.min(beta, eval_);
+        if (beta <= alpha) break; // Alpha-beta pruning
+      }
+      return minEval;
+    } else {
+      // Maximizing player (AI)
+      let maxEval = -Infinity;
+      for (let move of available) {
+        let removed = null;
+        moves["O"].push(move);
+        if (moves["O"].length > 3) {
+          removed = moves["O"].shift();
+        }
+
+        const eval_ = minimax(depth - 1, "X", alpha, beta);
+        maxEval = Math.max(eval_, maxEval);
+        
+        moves["O"].pop();
+        if (removed !== null) moves["O"].unshift(removed);
+        
+        alpha = Math.max(alpha, eval_);
+        if (beta <= alpha) break; // Alpha-beta pruning
+      }
+      return maxEval;
     }
+  }
 
-    let bestScore = isMaximizing ? -Infinity : Infinity;
+  function evaluatePosition(aiPlayer, opponent) {
+    let score = 0;
 
-    for (let nextMove of available) {
-      const nextPlayer = player === "O" ? "X" : "O";
-      const score = minimax(nextMove, nextPlayer, depth + 1, !isMaximizing);
-
-      if (isMaximizing) {
-        bestScore = Math.max(score, bestScore);
-      } else {
-        bestScore = Math.min(score, bestScore);
+    // Check if AI can win this turn
+    for (let pattern of winPatterns) {
+      const aiCount = pattern.filter(i => moves[aiPlayer].includes(i)).length;
+      const oppCount = pattern.filter(i => moves[opponent].includes(i)).length;
+      
+      if (aiCount === 2 && oppCount === 0) {
+        score += 50; // Winning move
+      } else if (aiCount === 1 && oppCount === 0) {
+        score += 10; // Good offensive potential
       }
     }
 
-    moves[player].pop();
-    return bestScore;
+    // Check if opponent can win and block it
+    for (let pattern of winPatterns) {
+      const oppCount = pattern.filter(i => moves[opponent].includes(i)).length;
+      const aiCount = pattern.filter(i => moves[aiPlayer].includes(i)).length;
+      
+      if (oppCount === 2 && aiCount === 0) {
+        score += 40; // Must block
+      } else if (oppCount === 1 && aiCount === 0) {
+        score += 5; // Defensive potential
+      }
+    }
+
+    // Prefer center and corners (strategic positions)
+    const centerCorners = [0, 2, 4, 6, 8];
+    if (moves[aiPlayer].length > 0 && centerCorners.includes(moves[aiPlayer][moves[aiPlayer].length - 1])) {
+      score += 3;
+    }
+
+    return score;
   }
+
+
 
   function getAvailableMovesForSimulation() {
     const occupiedX = new Set(moves["X"]);
