@@ -108,13 +108,13 @@ Oldest piece is removed automatically.</p>
     cell.addEventListener("click", () => {
       if (cell.textContent !== "" || !gameActive) return;
 
-      // Player X move
-      makeMove(i, "X");
+      // Make move for current player
+      makeMove(i, currentPlayer);
 
-      // Check win after player move
-      if (checkWin("X")) {
+      // Check win after move
+      if (checkWin(currentPlayer)) {
         setTimeout(() => {
-          alert("X wins!");
+          alert(currentPlayer + " wins!");
           resetBoard();
         }, 50);
         return;
@@ -129,8 +129,11 @@ Oldest piece is removed automatically.</p>
         return;
       }
 
-      // Computer move (if applicable)
-      if (gameMode !== "2player") {
+      // Switch player or trigger computer move
+      if (gameMode === "2player") {
+        currentPlayer = currentPlayer === "X" ? "O" : "X";
+      } else {
+        // Computer move (AI plays as O)
         gameActive = false;
         setTimeout(() => {
           try {
@@ -162,8 +165,6 @@ Oldest piece is removed automatically.</p>
             gameActive = true;
           }
         }, 500);
-      } else {
-        currentPlayer = currentPlayer === "X" ? "O" : "X";
       }
     });
   }
